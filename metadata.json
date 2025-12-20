@@ -1,0 +1,5 @@
+{
+  "name": "CyberFit: AI 虚拟试衣间",
+  "description": "基于 Gemini 的未来派虚拟试衣应用。分析模特和服装特征，生成专业提示词，利用先进的 AI 图像编辑功能实现虚拟换装。",
+  "requestFramePermissions": []
+}
