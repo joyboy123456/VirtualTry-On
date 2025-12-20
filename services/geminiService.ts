@@ -233,3 +233,81 @@ export const generateTryOnImage = async (
 
   throw new Error("No image generated.");
 };
+
+// 5. Generate 4 E-commerce Poses
+export const generateEcommercePoses = async (
+  modelImageBase64: string, 
+  modelMimeType: string, 
+  clothingItems: { base64: string, mimeType: string, analysis?: ClothingAnalysis, customModifier?: string }[],
+  basePrompt: string
+): Promise<string[]> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const model = "gemini-3-pro-image-preview";
+
+  // Define 4 distinct e-commerce poses
+  const poses = [
+    "Dynamic Walking: Full body shot, model walking towards camera, natural movement, fabric motion, high-end e-commerce style, studio white background.",
+    "Side Profile: Standing side profile, highlighting the silhouette of the outfit, hand elegantly placed, fashion catalog style, soft lighting.",
+    "Casual Standing: Relaxed standing pose, weight on one leg, hands in pockets or natural gesture, engaging eye contact, clean commercial look.",
+    "Detail/Sitting: Model sitting on a minimal stool or posing to show lower body details/shoes, artistic fashion composition, sharp focus."
+  ];
+
+  // Helper function for single generation
+  const generateSinglePose = async (poseDescription: string) => {
+    // Build the textual description of references
+    let referenceDescription = "Reference Images:\n1. The first image is the MODEL.\n";
+    clothingItems.forEach((item, index) => {
+      const part = item.analysis?.bodyPartId || "specified part";
+      referenceDescription += `${index + 2}. The image #${index + 2} is a CLOTHING item for the [${part}].`;
+      if (item.customModifier) {
+        referenceDescription += ` Note for this item: ${item.customModifier}`;
+      }
+      referenceDescription += "\n";
+    });
+
+    // Modified Prompt for specific pose + Taobao/Ecommerce style
+    const posePrompt = `
+    ${referenceDescription}
+
+    Task:
+    Generate a professional E-COMMERCE / FASHION CATALOG image of the person from the MODEL image wearing the clothing items.
+    
+    Style: High-end Taobao/Tmall fashion photography, Commercial studio lighting, 8k resolution, ultra-realistic texture.
+    
+    Specific Pose Instruction: ${poseDescription}
+
+    Clothing Requirements:
+    - Copy visual details (color, pattern) from references exactly.
+    - Base clothing combination: ${basePrompt}
+    - Keep Model's Identity (face/hair) consistent with image #1.
+    `;
+
+    const parts = [
+      fileToGenerativePart(modelImageBase64, modelMimeType),
+      ...clothingItems.map(item => fileToGenerativePart(item.base64, item.mimeType)),
+      { text: posePrompt }
+    ];
+
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: { parts }
+      });
+
+      for (const part of response.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData && part.inlineData.data) {
+            return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        }
+      }
+      return null;
+    } catch (e) {
+      console.error("Failed to generate pose:", e);
+      return null;
+    }
+  };
+
+  // Run in parallel
+  const results = await Promise.all(poses.map(pose => generateSinglePose(pose)));
+  
+  return results.filter((res): res is string => res !== null);
+};

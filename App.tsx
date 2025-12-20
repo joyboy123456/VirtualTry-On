@@ -5,10 +5,11 @@ import {
   analyzeModelImage, 
   analyzeClothingImage, 
   generateFittingPrompt, 
-  generateTryOnImage 
+  generateTryOnImage,
+  generateEcommercePoses
 } from './services/geminiService';
 import { ModelAnalysis, ClothingAnalysis, ClothingItem, AppStep } from './types';
-import { Wand2, RefreshCw, Cpu, Layers, Shirt, User, Upload, Key } from 'lucide-react';
+import { Wand2, RefreshCw, Cpu, Layers, Shirt, User, Upload, Key, LayoutGrid, Maximize2 } from 'lucide-react';
 
 const App: React.FC = () => {
   // Key State
@@ -51,9 +52,11 @@ const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [isGeneratingPoses, setIsGeneratingPoses] = useState(false);
   
   const [prompt, setPrompt] = useState<string>("");
   const [resultImage, setResultImage] = useState<string | null>(null);
+  const [poseImages, setPoseImages] = useState<string[]>([]);
   const [step, setStep] = useState<AppStep>(AppStep.UPLOAD);
 
   // Helper to extract clean base64
@@ -82,6 +85,7 @@ const App: React.FC = () => {
       setStep(AppStep.UPLOAD);
       setPrompt("");
       setResultImage(null);
+      setPoseImages([]);
     }
   };
 
@@ -91,6 +95,7 @@ const App: React.FC = () => {
     if (clothingItems.length <= 1) {
       setPrompt("");
       setResultImage(null);
+      setPoseImages([]);
       if (step !== AppStep.UPLOAD) setStep(AppStep.UPLOAD);
     }
   };
@@ -103,13 +108,6 @@ const App: React.FC = () => {
       }
       return item;
     }));
-    
-    // If we have data, regenerate prompt automatically to reflect changes
-    if (modelAnalysis && clothingItems.some(i => i.analysis)) {
-       // Debounce or just reset prompt state to trigger manual regen?
-       // Let's reset step to PROMPT to encourage user to click "Generate" or see the prompt update
-       // For now, let's just allow the user to hit the "Update Data" button or we can manually trigger prompt regen.
-    }
   };
 
   // Analysis Action
@@ -181,6 +179,7 @@ const App: React.FC = () => {
     
     setStep(AppStep.RESULT);
     setIsGeneratingImage(true);
+    setPoseImages([]); // Reset previous poses
     
     try {
       // Prepare payload for clothing items
@@ -206,6 +205,33 @@ const App: React.FC = () => {
     }
   };
 
+  const handleGeneratePoses = async () => {
+    if (!modelImage || clothingItems.length === 0 || !prompt) return;
+
+    setIsGeneratingPoses(true);
+    try {
+      const clothingPayload = clothingItems.map(item => ({
+        base64: getCleanBase64(item.base64),
+        mimeType: item.file.type,
+        analysis: item.analysis || undefined,
+        customModifier: item.customModifier
+      }));
+
+      const poses = await generateEcommercePoses(
+        getCleanBase64(modelImage.base64), 
+        modelImage.file.type,
+        clothingPayload,
+        prompt
+      );
+      setPoseImages(poses);
+    } catch (error) {
+      console.error("Pose generation failed", error);
+      alert("生成展示图失败");
+    } finally {
+      setIsGeneratingPoses(false);
+    }
+  };
+
   // Full Reset
   const resetAll = () => {
     setStep(AppStep.UPLOAD);
@@ -214,6 +240,7 @@ const App: React.FC = () => {
     setModelAnalysis(null);
     setPrompt("");
     setResultImage(null);
+    setPoseImages([]);
   };
 
   // Keep Model, Clear All Clothing
@@ -222,6 +249,7 @@ const App: React.FC = () => {
     setClothingItems([]);
     setPrompt("");
     setResultImage(null);
+    setPoseImages([]);
   };
 
   const getItem = (slotId: string) => clothingItems.find(i => i.slotId === slotId);
@@ -570,55 +598,101 @@ const App: React.FC = () => {
           </div>
 
           {/* Result Area */}
-          <div className="flex-1 bg-gray-950/50 border border-gray-800 rounded-xl relative overflow-hidden min-h-[400px] flex items-center justify-center group">
-             
-             {!resultImage && !isGeneratingImage && (
-               <div className="text-center space-y-4 opacity-30">
-                 <Cpu size={64} className="mx-auto" />
-                 <p className="font-mono text-lg">READY FOR SYNTHESIS</p>
-               </div>
-             )}
+          <div className="flex-1 space-y-4">
+             {/* Main Result */}
+             <div className="bg-gray-950/50 border border-gray-800 rounded-xl relative overflow-hidden min-h-[400px] flex items-center justify-center group">
+                
+                {!resultImage && !isGeneratingImage && (
+                  <div className="text-center space-y-4 opacity-30">
+                    <Cpu size={64} className="mx-auto" />
+                    <p className="font-mono text-lg">READY FOR SYNTHESIS</p>
+                  </div>
+                )}
 
-             {isGeneratingImage && (
-               <div className="absolute inset-0 z-10 bg-black/80 flex flex-col items-center justify-center space-y-4 backdrop-blur-sm">
-                 <div className="relative w-24 h-24">
-                   <div className="absolute inset-0 border-4 border-t-cyan-500 border-r-transparent border-b-purple-500 border-l-transparent rounded-full animate-spin"></div>
-                   <div className="absolute inset-2 border-4 border-t-transparent border-r-pink-500 border-b-transparent border-l-yellow-500 rounded-full animate-spin-reverse"></div>
-                 </div>
-                 <p className="text-cyan-400 font-mono animate-pulse tracking-widest">RENDERING 4K...</p>
-               </div>
-             )}
+                {isGeneratingImage && (
+                  <div className="absolute inset-0 z-10 bg-black/80 flex flex-col items-center justify-center space-y-4 backdrop-blur-sm">
+                    <div className="relative w-24 h-24">
+                      <div className="absolute inset-0 border-4 border-t-cyan-500 border-r-transparent border-b-purple-500 border-l-transparent rounded-full animate-spin"></div>
+                      <div className="absolute inset-2 border-4 border-t-transparent border-r-pink-500 border-b-transparent border-l-yellow-500 rounded-full animate-spin-reverse"></div>
+                    </div>
+                    <p className="text-cyan-400 font-mono animate-pulse tracking-widest">RENDERING 4K...</p>
+                  </div>
+                )}
 
+                {resultImage && (
+                  <div className="relative w-full h-full flex items-center justify-center p-4 animate-fade-in">
+                    <img src={resultImage} alt="Result" className="max-w-full max-h-[600px] object-contain rounded-lg shadow-2xl shadow-cyan-900/20" />
+                    
+                    <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <a 
+                        href={resultImage} 
+                        download="cyberfit-result.png"
+                        className="bg-gray-900/80 hover:bg-cyan-600 text-white p-2 rounded-full backdrop-blur-md transition-colors border border-gray-700"
+                        title="下载"
+                      >
+                        <Upload size={18} className="rotate-180" />
+                      </a>
+                      
+                      <button 
+                        onClick={resetClothingOnly}
+                        className="bg-gray-900/80 hover:bg-yellow-600 text-white p-2 rounded-full backdrop-blur-md transition-colors border border-gray-700 flex items-center gap-1 px-3"
+                        title="保留模特，清空服装"
+                      >
+                        <Shirt size={16} />
+                        <span className="text-xs font-mono hidden sm:inline">新搭配</span>
+                      </button>
+
+                      <button 
+                        onClick={resetAll}
+                        className="bg-gray-900/80 hover:bg-red-600 text-white p-2 rounded-full backdrop-blur-md transition-colors border border-gray-700"
+                        title="重置"
+                      >
+                        <RefreshCw size={18} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+             </div>
+
+             {/* E-commerce Poses Section */}
              {resultImage && (
-               <div className="relative w-full h-full flex items-center justify-center p-4 animate-fade-in">
-                 <img src={resultImage} alt="Result" className="max-w-full max-h-[600px] object-contain rounded-lg shadow-2xl shadow-cyan-900/20" />
-                 
-                 <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                   <a 
-                     href={resultImage} 
-                     download="cyberfit-result.png"
-                     className="bg-gray-900/80 hover:bg-cyan-600 text-white p-2 rounded-full backdrop-blur-md transition-colors border border-gray-700"
-                     title="下载"
+               <div className="animate-fade-in-up">
+                 <div className="flex items-center justify-between mb-2">
+                   <h3 className="text-sm font-mono text-gray-400 flex items-center gap-2">
+                     <LayoutGrid size={14} /> 电商展示组图 (Taobao Style)
+                   </h3>
+                   <button
+                     disabled={isGeneratingPoses}
+                     onClick={handleGeneratePoses}
+                     className="px-3 py-1 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white text-xs font-bold uppercase rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 shadow-lg"
                    >
-                     <Upload size={18} className="rotate-180" />
-                   </a>
-                   
-                   <button 
-                     onClick={resetClothingOnly}
-                     className="bg-gray-900/80 hover:bg-yellow-600 text-white p-2 rounded-full backdrop-blur-md transition-colors border border-gray-700 flex items-center gap-1 px-3"
-                     title="保留模特，清空服装"
-                   >
-                     <Shirt size={16} />
-                     <span className="text-xs font-mono hidden sm:inline">新搭配</span>
+                     {isGeneratingPoses ? <RefreshCw className="animate-spin" size={12} /> : <Wand2 size={12} />}
+                     {isGeneratingPoses ? "生成中..." : "生成 4 张展示图"}
                    </button>
+                 </div>
 
-                   <button 
-                     onClick={resetAll}
-                     className="bg-gray-900/80 hover:bg-red-600 text-white p-2 rounded-full backdrop-blur-md transition-colors border border-gray-700"
-                     title="重置"
-                   >
-                     <RefreshCw size={18} />
-                   </button>
+                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {/* Placeholders or Results */}
+                    {isGeneratingPoses && poseImages.length === 0 ? (
+                      Array(4).fill(0).map((_, i) => (
+                        <div key={i} className="aspect-[3/4] bg-gray-900/50 rounded-lg border border-gray-800 flex items-center justify-center animate-pulse">
+                          <Shirt className="text-gray-700" />
+                        </div>
+                      ))
+                    ) : poseImages.length > 0 ? (
+                      poseImages.map((img, idx) => (
+                        <div key={idx} className="group relative aspect-[3/4] bg-gray-900 rounded-lg overflow-hidden border border-gray-800 hover:border-orange-500 transition-colors cursor-pointer" onClick={() => setResultImage(img)}>
+                           <img src={img} alt={`Pose ${idx}`} className="w-full h-full object-cover" />
+                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <Maximize2 className="text-white" size={20} />
+                           </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="col-span-4 p-4 text-center border border-dashed border-gray-800 rounded-lg text-gray-600 text-xs font-mono">
+                         点击按钮生成不同姿势的电商商品图
+                      </div>
+                    )}
                  </div>
                </div>
              )}
