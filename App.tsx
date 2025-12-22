@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AnalysisResult } from './components/AnalysisResult';
 import { EquipmentSlot } from './components/EquipmentSlot';
@@ -8,8 +9,8 @@ import {
   generateTryOnImage,
   generateEcommercePoses
 } from './services/geminiService';
-import { ModelAnalysis, ClothingAnalysis, ClothingItem, AppStep } from './types';
-import { Wand2, RefreshCw, Cpu, Layers, Shirt, User, Upload, Key, LayoutGrid, Maximize2 } from 'lucide-react';
+import { ModelAnalysis, ClothingAnalysis, ClothingItem, AppStep, AspectRatio } from './types';
+import { Wand2, RefreshCw, Cpu, Layers, Shirt, User, Upload, Key, LayoutGrid, Maximize2, Crop } from 'lucide-react';
 
 const App: React.FC = () => {
   // Key State
@@ -58,6 +59,9 @@ const App: React.FC = () => {
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [poseImages, setPoseImages] = useState<string[]>([]);
   const [step, setStep] = useState<AppStep>(AppStep.UPLOAD);
+
+  // New State for Aspect Ratio
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('Auto');
 
   // Helper to extract clean base64
   const getCleanBase64 = (dataUrl: string) => dataUrl.split(',')[1];
@@ -194,7 +198,8 @@ const App: React.FC = () => {
         getCleanBase64(modelImage.base64), 
         modelImage.file.type,
         clothingPayload,
-        prompt
+        prompt,
+        aspectRatio // Pass selected aspect ratio
       );
       setResultImage(img);
     } catch (error) {
@@ -241,6 +246,7 @@ const App: React.FC = () => {
     setPrompt("");
     setResultImage(null);
     setPoseImages([]);
+    setAspectRatio('Auto'); // Reset Aspect Ratio
   };
 
   // Keep Model, Clear All Clothing
@@ -573,7 +579,7 @@ const App: React.FC = () => {
               {isGeneratingPrompt && <span className="text-xs font-mono text-yellow-500 animate-pulse">生成中...</span>}
             </div>
 
-            <div className="bg-gray-900/80 border border-gray-700 rounded-lg p-1 shadow-inner">
+            <div className="bg-gray-900/80 border border-gray-700 rounded-lg p-1 shadow-inner relative">
                <textarea 
                  value={prompt}
                  onChange={(e) => setPrompt(e.target.value)}
@@ -581,14 +587,40 @@ const App: React.FC = () => {
                  className="w-full h-28 bg-transparent text-gray-300 font-mono text-xs sm:text-sm p-4 focus:outline-none resize-none"
                  placeholder="等待分析结果..."
                />
+               {/* Aspect Ratio Selector Overlay or Bottom Bar */}
             </div>
-            
-            <div className="mt-4 flex justify-end">
+
+            {/* Controls Bar: Ratio + Button */}
+            <div className="mt-4 flex flex-col sm:flex-row justify-between items-end sm:items-center gap-4">
+              
+              {/* Aspect Ratio Selector */}
+              <div className="flex flex-col gap-1 w-full sm:w-auto">
+                <label className="text-[10px] uppercase text-gray-500 font-mono tracking-wider flex items-center gap-1">
+                  <Crop size={10} /> 画幅比例 (Aspect Ratio)
+                </label>
+                <div className="flex bg-gray-900 rounded-md border border-gray-700 p-1 gap-1 overflow-x-auto max-w-full custom-scrollbar">
+                  {(['Auto', '9:16', '3:4', '1:1', '4:3', '16:9', '2:3', '3:2'] as AspectRatio[]).map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setAspectRatio(r)}
+                      className={`
+                        px-2 py-1 text-[10px] font-mono rounded whitespace-nowrap transition-all
+                        ${aspectRatio === r 
+                          ? 'bg-cyan-900 text-cyan-400 border border-cyan-500/50 shadow-sm' 
+                          : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'}
+                      `}
+                    >
+                      {r === 'Auto' ? '自动' : r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <button
                 disabled={!prompt || isGeneratingImage}
                 onClick={handleTryOn}
-                className={`px-8 py-3 rounded bg-gradient-to-r from-pink-600 to-purple-600 text-white font-mono font-bold tracking-wider uppercase transition-all
-                  hover:shadow-[0_0_20px_rgba(219,39,119,0.4)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2
+                className={`w-full sm:w-auto px-8 py-3 rounded bg-gradient-to-r from-pink-600 to-purple-600 text-white font-mono font-bold tracking-wider uppercase transition-all
+                  hover:shadow-[0_0_20px_rgba(219,39,119,0.4)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2
                 `}
               >
                 {isGeneratingImage ? <RefreshCw className="animate-spin" /> : <Wand2 size={18} />}

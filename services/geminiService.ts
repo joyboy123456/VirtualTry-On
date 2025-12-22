@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { ModelAnalysis, ClothingAnalysis, ClothingItem } from "../types";
+import { ModelAnalysis, ClothingAnalysis, ClothingItem, AspectRatio } from "../types";
 
 // Removed global instance to ensure fresh API Key on each call
 // const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -12,6 +13,44 @@ const fileToGenerativePart = (base64Data: string, mimeType: string) => {
       mimeType,
     },
   };
+};
+
+const getImageDimensions = (base64: string): Promise<{width: number, height: number}> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      resolve({ width: img.width, height: img.height });
+    };
+    img.src = base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`; // Robust check
+  });
+};
+
+const getSupportedAspectRatio = (ratio: AspectRatio, width: number, height: number): string => {
+  const supported = [
+      { str: "1:1", val: 1 },
+      { str: "3:4", val: 3/4 },
+      { str: "4:3", val: 4/3 },
+      { str: "9:16", val: 9/16 },
+      { str: "16:9", val: 16/9 }
+  ];
+
+  let targetRatioValue = 1;
+
+  if (ratio === 'Auto') {
+      targetRatioValue = width / height;
+  } else if (ratio === '2:3') {
+      targetRatioValue = 2/3;
+  } else if (ratio === '3:2') {
+      targetRatioValue = 3/2;
+  } else {
+      // If it is already a supported string, return it directly
+      return ratio;
+  }
+
+  // Find closest supported
+  return supported.reduce((prev, curr) => {
+      return (Math.abs(curr.val - targetRatioValue) < Math.abs(prev.val - targetRatioValue) ? curr : prev);
+  }).str;
 };
 
 // 1. Model Analysis
@@ -182,11 +221,22 @@ export const generateTryOnImage = async (
   modelImageBase64: string, 
   modelMimeType: string, 
   clothingItems: { base64: string, mimeType: string, analysis?: ClothingAnalysis, customModifier?: string }[],
-  prompt: string
+  prompt: string,
+  targetRatio: AspectRatio = 'Auto'
 ): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   // Updated model to Gemini 3 Pro Image Preview
   const model = "gemini-3-pro-image-preview";
+
+  // Calculate correct aspect ratio
+  // We need dimensions of the model image to handle 'Auto' and 'Match Input' logic best
+  // NOTE: getCleanBase64 usually strips the prefix, so we might need to be careful if passing to new Image()
+  // But caller passes clean base64. new Image src needs prefix.
+  const fullDataUrl = `data:${modelMimeType};base64,${modelImageBase64}`;
+  const dimensions = await getImageDimensions(fullDataUrl);
+  const aspectRatio = getSupportedAspectRatio(targetRatio, dimensions.width, dimensions.height);
+
+  console.log(`Generating with Aspect Ratio: ${aspectRatio} (Requested: ${targetRatio})`);
 
   // Build the textual description of references
   let referenceDescription = "Reference Images:\n1. The first image is the MODEL.\n";
@@ -221,7 +271,13 @@ export const generateTryOnImage = async (
 
   const response = await ai.models.generateContent({
     model,
-    contents: { parts }
+    contents: { parts },
+    config: {
+      imageConfig: {
+        aspectRatio: aspectRatio,
+        imageSize: "1K" // Defaulting to 1K for speed/cost, could expose this too if needed
+      }
+    }
   });
 
   // Extract image from response
@@ -243,6 +299,12 @@ export const generateEcommercePoses = async (
 ): Promise<string[]> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = "gemini-3-pro-image-preview";
+
+  // For poses, we usually want a vertical aspect ratio for fashion (3:4 or 9:16)
+  // But let's stick to 3:4 as a safe default for e-commerce, or we could pass the user selection too.
+  // The user prompt didn't explicitly ask to change the pose generation ratio, but "generate images" implies general control.
+  // Let's force 3:4 for poses as they are "poses" typically vertical.
+  const aspectRatio = "3:4"; 
 
   // Define 4 distinct e-commerce poses
   const poses = [
@@ -291,7 +353,13 @@ export const generateEcommercePoses = async (
     try {
       const response = await ai.models.generateContent({
         model,
-        contents: { parts }
+        contents: { parts },
+        config: {
+          imageConfig: {
+            aspectRatio: aspectRatio, // Using fixed 3:4 for poses
+            imageSize: "1K"
+          }
+        }
       });
 
       for (const part of response.candidates?.[0]?.content?.parts || []) {

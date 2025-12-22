@@ -1,3 +1,4 @@
+
 export interface ModelAnalysis {
   bodyType: string;
   skinTone: string;
@@ -46,3 +47,5 @@ export enum AppStep {
   PROMPT = 'PROMPT',
   RESULT = 'RESULT'
 }
+
+export type AspectRatio = 'Auto' | '9:16' | '2:3' | '3:4' | '1:1' | '4:3' | '3:2' | '16:9';
