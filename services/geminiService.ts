@@ -2,8 +2,26 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ModelAnalysis, ClothingAnalysis, ClothingItem, AspectRatio } from "../types";
 
-// Removed global instance to ensure fresh API Key on each call
-// const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// API Key 轮询机制
+const getApiKeys = (): string[] => {
+  const keys = process.env.API_KEYS?.split(',').map(k => k.trim()).filter(k => k && !k.includes('你的')) || [];
+  if (keys.length === 0 && process.env.API_KEY) {
+    keys.push(process.env.API_KEY);
+  }
+  return keys;
+};
+
+let currentKeyIndex = 0;
+const getNextApiKey = (): string => {
+  const keys = getApiKeys();
+  if (keys.length === 0) throw new Error("No API keys configured");
+  const key = keys[currentKeyIndex % keys.length];
+  currentKeyIndex++;
+  return key;
+};
+
+// 创建 AI 实例（每次调用使用下一个 Key）
+const createAI = () => new GoogleGenAI({ apiKey: getNextApiKey() });
 
 // Helpers
 const fileToGenerativePart = (base64Data: string, mimeType: string) => {
@@ -55,7 +73,7 @@ const getSupportedAspectRatio = (ratio: AspectRatio, width: number, height: numb
 
 // 1. Model Analysis
 export const analyzeModelImage = async (base64Image: string, mimeType: string): Promise<ModelAnalysis> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = createAI();
   const model = "gemini-3-flash-preview"; 
   
   const prompt = `
@@ -106,7 +124,7 @@ export const analyzeModelImage = async (base64Image: string, mimeType: string): 
 
 // 2. Clothing Analysis
 export const analyzeClothingImage = async (base64Image: string, mimeType: string, suggestedBodyPart?: string): Promise<ClothingAnalysis> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = createAI();
   const model = "gemini-3-flash-preview";
 
   const prompt = `
@@ -167,7 +185,7 @@ export const generateFittingPrompt = async (
   modelAnalysis: ModelAnalysis, 
   clothingItems: ClothingItem[]
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = createAI();
   const model = "gemini-3-flash-preview";
 
   // Prepare simple structure for the LLM to understand both analysis AND user modifiers
@@ -224,7 +242,7 @@ export const generateTryOnImage = async (
   prompt: string,
   targetRatio: AspectRatio = 'Auto'
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = createAI();
   // Updated model to Gemini 3 Pro Image Preview
   const model = "gemini-3-pro-image-preview";
 
@@ -238,13 +256,13 @@ export const generateTryOnImage = async (
 
   console.log(`Generating with Aspect Ratio: ${aspectRatio} (Requested: ${targetRatio})`);
 
-  // Build the textual description of references
-  let referenceDescription = "Reference Images:\n1. The first image is the MODEL.\n";
+  // Build the textual description of references - 使用图一图二的清晰描述
+  let referenceDescription = "【图片说明】\n图一：模特原图（必须严格保持此图中的姿势、表情、角度）\n";
   clothingItems.forEach((item, index) => {
-    const part = item.analysis?.bodyPartId || "specified part";
-    referenceDescription += `${index + 2}. The image #${index + 2} is a CLOTHING item for the [${part}].`;
+    const part = item.analysis?.bodyPartId || "指定部位";
+    referenceDescription += `图${index + 2}：服装素材 - 用于[${part}]`;
     if (item.customModifier) {
-      referenceDescription += ` Note for this item: ${item.customModifier}`;
+      referenceDescription += `（备注：${item.customModifier}）`;
     }
     referenceDescription += "\n";
   });
@@ -252,14 +270,28 @@ export const generateTryOnImage = async (
   const multimodalPrompt = `
   ${referenceDescription}
 
-  Task:
-  Generate a photorealistic image of the person from the MODEL image wearing the clothing items shown in the reference images.
+  【核心任务】
+  让图一的模特穿上图二${clothingItems.length > 1 ? '、图三等' : ''}的服装，生成一张高质量换装图。
+
+  【最高优先级 - 姿势保持】
+  ⚠️ 必须100%复制图一模特的：
+  - 完全相同的站姿/坐姿/动作
+  - 完全相同的手臂位置和手势
+  - 完全相同的腿部姿态和重心
+  - 完全相同的头部角度和面部朝向
+  - 完全相同的身体倾斜角度
   
-  Strict requirements:
-  - Copy the visual details (color, texture, pattern) from EACH clothing reference image exactly.
-  - Apply each clothing item to its corresponding body part as described in the prompt: ${prompt}
-  - Keep the MODEL'S face, hair, pose, and body shape exactly as they are in the first image.
-  - Ensure correct layering (e.g., shirt under jacket).
+  【服装要求】
+  - 精确复制每件服装的颜色、材质、纹理、图案
+  - 服装细节说明：${prompt}
+  - 正确处理服装层次（内搭在外套里面）
+
+  【身份保持】
+  - 保持模特的面部特征、肤色、发型发色完全不变
+  - 保持原图的背景环境
+  
+  【输出质量】
+  专业时尚摄影，8K超高清，锐利对焦
   `;
 
   // Construct parts: Model Image + All Clothing Images + Prompt Text
@@ -297,7 +329,7 @@ export const generateEcommercePoses = async (
   clothingItems: { base64: string, mimeType: string, analysis?: ClothingAnalysis, customModifier?: string }[],
   basePrompt: string
 ): Promise<string[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = createAI();
   const model = "gemini-3-pro-image-preview";
 
   // For poses, we usually want a vertical aspect ratio for fashion (3:4 or 9:16)

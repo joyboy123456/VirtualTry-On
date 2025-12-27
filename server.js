@@ -1,3 +1,5 @@
+require('dotenv').config(); // 加载 .env 文件
+
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -6,8 +8,8 @@ const esbuild = require('esbuild');
 const app = express();
 // Cloud Run requires listening on 0.0.0.0 or the specific port provided via env
 const port = process.env.PORT || 8080;
-// Capture the API key from the server environment (e.g., set in Cloud Run console)
-const apiKey = process.env.API_KEY || '';
+// 支持多 Key 配置
+const apiKeys = process.env.API_KEYS || process.env.API_KEY || '';
 
 // Middleware to transform TSX/TS/JSX files on the fly
 app.use(async (req, res, next) => {
@@ -40,9 +42,9 @@ app.use(async (req, res, next) => {
         target: 'es2020',
         jsx: 'automatic', // Use React 17+ automatic runtime
         define: {
-          // CRITICAL: Inject the server-side API_KEY into the browser code
-          // This allows the app to work in Cloud Run where window.aistudio is not available
-          'process.env.API_KEY': JSON.stringify(apiKey)
+          // 注入多 Key 配置到浏览器端
+          'process.env.API_KEYS': JSON.stringify(apiKeys),
+          'process.env.API_KEY': JSON.stringify(process.env.API_KEY || '')
         }
       });
       
