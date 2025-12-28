@@ -266,10 +266,7 @@ const generateTryOnImage = async (modelImageBase64, modelMimeType, clothingItems
     model,
     contents: { parts },
     config: {
-      responseModalities: ["image", "text"],
-      imageConfig: {
-        aspectRatio: aspectRatio
-      }
+      responseModalities: ["image", "text"]
     }
   });
 
@@ -333,10 +330,7 @@ const generateEcommercePoses = async (modelImageBase64, modelMimeType, clothingI
         model,
         contents: { parts },
         config: {
-          responseModalities: ["image", "text"],
-          imageConfig: {
-            aspectRatio: aspectRatio
-          }
+          responseModalities: ["image", "text"]
         }
       });
 
