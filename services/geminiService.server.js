@@ -23,10 +23,18 @@ const getNextApiKey = () => {
 const createAI = () => new GoogleGenAI({ apiKey: getNextApiKey() });
 
 // Helpers
+// 清理 base64 数据，去掉 data:image/xxx;base64, 前缀
+const cleanBase64 = (base64Data) => {
+  if (base64Data.includes(',')) {
+    return base64Data.split(',')[1];
+  }
+  return base64Data;
+};
+
 const fileToGenerativePart = (base64Data, mimeType) => {
   return {
     inlineData: {
-      data: base64Data,
+      data: cleanBase64(base64Data),
       mimeType,
     },
   };
