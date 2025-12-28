@@ -214,7 +214,7 @@ const generateFittingPrompt = async (modelAnalysis, clothingItems) => {
 // 4. Generate Try-On Image
 const generateTryOnImage = async (modelImageBase64, modelMimeType, clothingItems, prompt, targetRatio = 'Auto', imageWidth = 512, imageHeight = 512) => {
   const ai = createAI();
-  const model = "gemini-2.0-flash-exp-image-generation";
+  const model = "gemini-3-pro-image-preview";
 
   const aspectRatio = getSupportedAspectRatio(targetRatio, imageWidth, imageHeight);
   console.log(`Generating with Aspect Ratio: ${aspectRatio} (Requested: ${targetRatio})`);
@@ -266,7 +266,10 @@ const generateTryOnImage = async (modelImageBase64, modelMimeType, clothingItems
     model,
     contents: { parts },
     config: {
-      responseModalities: ["image", "text"]
+      imageConfig: {
+        aspectRatio: aspectRatio,
+        imageSize: "1K"
+      }
     }
   });
 
@@ -282,7 +285,7 @@ const generateTryOnImage = async (modelImageBase64, modelMimeType, clothingItems
 // 5. Generate E-commerce Poses
 const generateEcommercePoses = async (modelImageBase64, modelMimeType, clothingItems, basePrompt) => {
   const ai = createAI();
-  const model = "gemini-2.0-flash-exp-image-generation";
+  const model = "gemini-3-pro-image-preview";
   const aspectRatio = "3:4";
 
   const poses = [
@@ -330,7 +333,10 @@ const generateEcommercePoses = async (modelImageBase64, modelMimeType, clothingI
         model,
         contents: { parts },
         config: {
-          responseModalities: ["image", "text"]
+          imageConfig: {
+            aspectRatio: aspectRatio,
+            imageSize: "1K"
+          }
         }
       });
 
