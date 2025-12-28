@@ -63,10 +63,19 @@ app.post('/api/generate-prompt', async (req, res) => {
 // 生成试穿图片
 app.post('/api/generate-tryon', async (req, res) => {
   try {
-    const { modelImageBase64, modelMimeType, clothingItems, prompt, targetRatio, imageWidth, imageHeight } = req.body;
+    const { modelImageBase64, modelMimeType, clothingItems, prompt, targetRatio, imageWidth, imageHeight, imageSize, password } = req.body;
     if (!modelImageBase64 || !modelMimeType || !clothingItems || !prompt) {
       return res.status(400).json({ error: 'Missing required parameters' });
     }
+
+    // 4K 需要密码验证
+    let finalImageSize = imageSize || '1K';
+    if (finalImageSize === '4K') {
+      if (password !== '546750103') {
+        return res.status(403).json({ error: '4K 分辨率需要输入正确的密码' });
+      }
+    }
+
     const result = await geminiService.generateTryOnImage(
       modelImageBase64,
       modelMimeType,
@@ -74,7 +83,8 @@ app.post('/api/generate-tryon', async (req, res) => {
       prompt,
       targetRatio || 'Auto',
       imageWidth || 512,
-      imageHeight || 512
+      imageHeight || 512,
+      finalImageSize
     );
     res.json({ image: result });
   } catch (error) {

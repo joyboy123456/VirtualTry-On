@@ -63,13 +63,18 @@ export const generateFittingPrompt = async (
   return data.prompt;
 };
 
+// 图片分辨率类型
+export type ImageSize = '1K' | '2K' | '4K';
+
 // 4. 生成试穿图片
 export const generateTryOnImage = async (
   modelImageBase64: string,
   modelMimeType: string,
   clothingItems: { base64: string, mimeType: string, analysis?: ClothingAnalysis, customModifier?: string }[],
   prompt: string,
-  targetRatio: AspectRatio = 'Auto'
+  targetRatio: AspectRatio = 'Auto',
+  imageSize: ImageSize = '1K',
+  password?: string
 ): Promise<string> => {
   // 获取图片尺寸用于宽高比计算
   const fullDataUrl = `data:${modelMimeType};base64,${modelImageBase64}`;
@@ -85,7 +90,9 @@ export const generateTryOnImage = async (
       prompt,
       targetRatio,
       imageWidth: dimensions.width,
-      imageHeight: dimensions.height
+      imageHeight: dimensions.height,
+      imageSize,
+      password
     })
   });
 

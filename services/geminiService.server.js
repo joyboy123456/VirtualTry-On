@@ -212,12 +212,12 @@ const generateFittingPrompt = async (modelAnalysis, clothingItems) => {
 };
 
 // 4. Generate Try-On Image
-const generateTryOnImage = async (modelImageBase64, modelMimeType, clothingItems, prompt, targetRatio = 'Auto', imageWidth = 512, imageHeight = 512) => {
+const generateTryOnImage = async (modelImageBase64, modelMimeType, clothingItems, prompt, targetRatio = 'Auto', imageWidth = 512, imageHeight = 512, imageSize = '1K') => {
   const ai = createAI();
   const model = "gemini-3-pro-image-preview";
 
   const aspectRatio = getSupportedAspectRatio(targetRatio, imageWidth, imageHeight);
-  console.log(`Generating with Aspect Ratio: ${aspectRatio} (Requested: ${targetRatio})`);
+  console.log(`Generating with Aspect Ratio: ${aspectRatio}, Image Size: ${imageSize} (Requested: ${targetRatio})`);
 
   let referenceDescription = "【图片说明】\n图一：模特原图（必须严格保持此图中的姿势、表情、角度）\n";
   clothingItems.forEach((item, index) => {
@@ -268,7 +268,7 @@ const generateTryOnImage = async (modelImageBase64, modelMimeType, clothingItems
     config: {
       imageConfig: {
         aspectRatio: aspectRatio,
-        imageSize: "1K"
+        imageSize: imageSize
       }
     }
   });
