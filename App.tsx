@@ -2,12 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { AnalysisResult } from './components/AnalysisResult';
 import { EquipmentSlot } from './components/EquipmentSlot';
-import { 
-  analyzeModelImage, 
-  analyzeClothingImage, 
-  generateFittingPrompt, 
+import {
+  analyzeModelImage,
+  analyzeClothingImage,
+  generateFittingPrompt,
   generateTryOnImage,
-  generateEcommercePoses
+  generateEcommercePoses,
+  ImageSize
 } from './services/geminiService';
 import { ModelAnalysis, ClothingAnalysis, ClothingItem, AppStep, AspectRatio } from './types';
 import { Wand2, RefreshCw, Cpu, Layers, Shirt, User, Upload, Key, LayoutGrid, Maximize2, Crop } from 'lucide-react';
@@ -62,6 +63,11 @@ const App: React.FC = () => {
 
   // New State for Aspect Ratio
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('Auto');
+
+  // New State for Image Size (Resolution)
+  const [imageSize, setImageSize] = useState<ImageSize>('1K');
+  const [password4K, setPassword4K] = useState<string>('');
+  const [show4KPasswordInput, setShow4KPasswordInput] = useState(false);
 
   // Helper to extract clean base64
   const getCleanBase64 = (dataUrl: string) => dataUrl.split(',')[1];
@@ -195,16 +201,18 @@ const App: React.FC = () => {
       }));
 
       const img = await generateTryOnImage(
-        getCleanBase64(modelImage.base64), 
+        getCleanBase64(modelImage.base64),
         modelImage.file.type,
         clothingPayload,
         prompt,
-        aspectRatio // Pass selected aspect ratio
+        aspectRatio, // Pass selected aspect ratio
+        imageSize,   // Pass selected image size
+        imageSize === '4K' ? password4K : undefined // Pass password only for 4K
       );
       setResultImage(img);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Generation failed", error);
-      alert("图像生成失败。");
+      alert(error.message || "图像生成失败。");
     } finally {
       setIsGeneratingImage(false);
     }
@@ -247,6 +255,9 @@ const App: React.FC = () => {
     setResultImage(null);
     setPoseImages([]);
     setAspectRatio('Auto'); // Reset Aspect Ratio
+    setImageSize('1K'); // Reset Image Size
+    setPassword4K('');
+    setShow4KPasswordInput(false);
   };
 
   // Keep Model, Clear All Clothing
@@ -590,41 +601,92 @@ const App: React.FC = () => {
                {/* Aspect Ratio Selector Overlay or Bottom Bar */}
             </div>
 
-            {/* Controls Bar: Ratio + Button */}
-            <div className="mt-4 flex flex-col sm:flex-row justify-between items-end sm:items-center gap-4">
-              
-              {/* Aspect Ratio Selector */}
-              <div className="flex flex-col gap-1 w-full sm:w-auto">
-                <label className="text-[10px] uppercase text-gray-500 font-mono tracking-wider flex items-center gap-1">
-                  <Crop size={10} /> 画幅比例 (Aspect Ratio)
-                </label>
-                <div className="flex bg-gray-900 rounded-md border border-gray-700 p-1 gap-1 overflow-x-auto max-w-full custom-scrollbar">
-                  {(['Auto', '9:16', '3:4', '1:1', '4:3', '16:9', '2:3', '3:2'] as AspectRatio[]).map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => setAspectRatio(r)}
-                      className={`
-                        px-2 py-1 text-[10px] font-mono rounded whitespace-nowrap transition-all
-                        ${aspectRatio === r 
-                          ? 'bg-cyan-900 text-cyan-400 border border-cyan-500/50 shadow-sm' 
-                          : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'}
-                      `}
-                    >
-                      {r === 'Auto' ? '自动' : r}
-                    </button>
-                  ))}
+            {/* Controls Bar: Ratio + Resolution + Button */}
+            <div className="mt-4 flex flex-col gap-4">
+
+              <div className="flex flex-col sm:flex-row gap-4">
+                {/* Aspect Ratio Selector */}
+                <div className="flex flex-col gap-1 flex-1">
+                  <label className="text-[10px] uppercase text-gray-500 font-mono tracking-wider flex items-center gap-1">
+                    <Crop size={10} /> 画幅比例 (Aspect Ratio)
+                  </label>
+                  <div className="flex bg-gray-900 rounded-md border border-gray-700 p-1 gap-1 overflow-x-auto max-w-full custom-scrollbar">
+                    {(['Auto', '9:16', '3:4', '1:1', '4:3', '16:9', '2:3', '3:2'] as AspectRatio[]).map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => setAspectRatio(r)}
+                        className={`
+                          px-2 py-1 text-[10px] font-mono rounded whitespace-nowrap transition-all
+                          ${aspectRatio === r
+                            ? 'bg-cyan-900 text-cyan-400 border border-cyan-500/50 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'}
+                        `}
+                      >
+                        {r === 'Auto' ? '自动' : r}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Image Size (Resolution) Selector */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] uppercase text-gray-500 font-mono tracking-wider flex items-center gap-1">
+                    <Maximize2 size={10} /> 画质 (Resolution)
+                  </label>
+                  <div className="flex bg-gray-900 rounded-md border border-gray-700 p-1 gap-1">
+                    {(['1K', '2K', '4K'] as ImageSize[]).map((size) => (
+                      <button
+                        key={size}
+                        onClick={() => {
+                          setImageSize(size);
+                          if (size === '4K') {
+                            setShow4KPasswordInput(true);
+                          } else {
+                            setShow4KPasswordInput(false);
+                            setPassword4K('');
+                          }
+                        }}
+                        className={`
+                          px-3 py-1 text-[10px] font-mono rounded whitespace-nowrap transition-all
+                          ${imageSize === size
+                            ? size === '4K'
+                              ? 'bg-yellow-900 text-yellow-400 border border-yellow-500/50 shadow-sm'
+                              : 'bg-cyan-900 text-cyan-400 border border-cyan-500/50 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'}
+                        `}
+                      >
+                        {size}
+                        {size === '4K' && <Key size={8} className="inline ml-1" />}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
+              {/* 4K Password Input */}
+              {show4KPasswordInput && imageSize === '4K' && (
+                <div className="flex items-center gap-2 bg-yellow-900/20 border border-yellow-700/50 rounded-md p-2">
+                  <Key size={14} className="text-yellow-500" />
+                  <input
+                    type="password"
+                    placeholder="输入4K密码..."
+                    value={password4K}
+                    onChange={(e) => setPassword4K(e.target.value)}
+                    className="flex-1 bg-transparent border-none outline-none text-yellow-400 font-mono text-sm placeholder-yellow-700"
+                  />
+                  <span className="text-[10px] text-yellow-600 font-mono">4K需要密码</span>
+                </div>
+              )}
+
               <button
-                disabled={!prompt || isGeneratingImage}
+                disabled={!prompt || isGeneratingImage || (imageSize === '4K' && !password4K)}
                 onClick={handleTryOn}
                 className={`w-full sm:w-auto px-8 py-3 rounded bg-gradient-to-r from-pink-600 to-purple-600 text-white font-mono font-bold tracking-wider uppercase transition-all
                   hover:shadow-[0_0_20px_rgba(219,39,119,0.4)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2
                 `}
               >
                 {isGeneratingImage ? <RefreshCw className="animate-spin" /> : <Wand2 size={18} />}
-                {isGeneratingImage ? "处理中" : "生成高清图像"}
+                {isGeneratingImage ? "处理中" : `生成${imageSize}高清图像`}
               </button>
             </div>
           </div>
